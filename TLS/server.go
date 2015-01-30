@@ -1,96 +1,13 @@
 package main
 
 import (
-	"crypto/rand"
-	"encoding/base32"
 	. "fmt"
 	"html/template"
 	"io/ioutil"
 	"net/http"
-	. "time"
 
 	"github.com/julienschmidt/httprouter"
 )
-
-type FileStore map[string]string
-
-type user struct {
-	ID         string
-	Registered Time
-	FileStore
-}
-
-func (u *user) Files() (r int) {
-	return len(u.FileStore)
-}
-
-type UserDirectory map[string]user
-
-func (u *UserDirectory) NewUserToken() string {
-	b := make([]byte, 30)
-	if _, e := rand.Read(b); e != nil {
-		panic(Sprintf("rand.Read failed: %v", e))
-	}
-	return base32.StdEncoding.EncodeToString(b)
-}
-
-func (u *UserDirectory) CreateUser() (t string) {
-	t = u.NewUserToken()
-	for _, ok := server.UserDirectory[t]; ok; _, ok = server.UserDirectory[t] {
-		t = u.NewUserToken()
-	}
-	(*u)[t] = user{t, Now(), make(FileStore)}
-	return
-}
-
-type FileServer struct {
-	Started Time
-	Address string
-	*httprouter.Router
-	UserDirectory
-	Requests int
-}
-
-func (s *FileServer) ListenAndServeTLS(c, k string) {
-	s.Started = Now()
-	http.ListenAndServeTLS(s.Address, c, k, s.Router)
-}
-
-func (s *FileServer) Users() int {
-	return len(s.UserDirectory)
-}
-
-func (s *FileServer) Files(u ...string) (r int) {
-	if len(u) == 0 {
-		for _, v := range s.UserDirectory {
-			r += len(v.FileStore)
-		}
-	} else {
-		for _, k := range u {
-			if f, ok := s.UserDirectory[k]; ok {
-				r += f.Files()
-			}
-		}
-	}
-	return
-}
-
-func (s *FileServer) Now() Time {
-	return Now()
-}
-
-func (s *FileServer) RequiresAuthorisation(w http.ResponseWriter, id string, f func(user)) {
-	s.Requests++
-	if u, ok := s.UserDirectory[id]; ok {
-		f(u)
-	} else {
-		http.Error(w, "Not Found", http.StatusNotFound)
-	}
-}
-
-func NewFileServer(a string) *FileServer {
-	return &FileServer{Address: a, UserDirectory: make(UserDirectory), Router: httprouter.New()}
-}
 
 var templates = template.Must(template.ParseFiles("server_status.html", "user_status.html", "list_files.html"))
 var server = NewFileServer("localhost:1024")
