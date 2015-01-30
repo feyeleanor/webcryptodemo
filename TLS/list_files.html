@@ -1,0 +1,19 @@
+<html>
+	<head>
+		<title>Stored Files</title>
+	</head>
+	<body>
+		<table>
+			<tr>
+				<th>file</th>
+				<th>size</th>
+			</tr>
+			{{ range $name, $content := .FileStore }}
+				<tr>
+					<td>{{$name}}</td>
+					<td>{{ len $content }}</td>
+				</tr>
+			{{ end }}
+		</table>
+	</body>
+</html>
