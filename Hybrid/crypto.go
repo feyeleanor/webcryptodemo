@@ -8,7 +8,8 @@ import (
 	"crypto/sha1"
 	"crypto/x509"
 	"encoding/pem"
-	. "fmt"
+	"fmt"
+	"io"
 )
 
 func EncryptRSA(key *rsa.PublicKey, m, l []byte) ([]byte, error) {
@@ -29,7 +30,6 @@ func LoadPrivateKey(b []byte) (r *rsa.PrivateKey, e error) {
 }
 
 func PublicKeyAsPem(k *rsa.PrivateKey) (r string) {
-	Println(k.PublicKey)
 	if pubkey, e := x509.MarshalPKIXPublicKey(&k.PublicKey); e == nil {
 		r = string(pem.EncodeToMemory(&pem.Block{
 			Type:  "RSA PUBLIC KEY",
@@ -60,27 +60,15 @@ func GenerateAESKey(n int) string {
 	return string(b)
 }
 
-func EncryptAES(m, k string) (o []byte, e error) {
-	if o, e = Quantise(m); e == nil {
-		var b cipher.Block
-		if b, e = aes.NewCipher([]byte(k)); e == nil {
-			var iv []byte
-			if iv, e = IV(); e == nil {
-				c := cipher.NewCBCEncrypter(b, iv)
-				c.CryptBlocks(o, o)
-				o = append(iv, o...)
-			}
+func EncryptAES(w io.Writer, k string, f func(*cipher.StreamWriter)) (e error) {
+	var b cipher.Block
+	if b, e = aes.NewCipher([]byte(k)); e == nil {
+		var iv []byte
+		if iv, e = IV(); e == nil {
+			fmt.Println("e1:", iv)
+			f(&cipher.StreamWriter{S: cipher.NewOFB(b, iv), W: w})
+			fmt.Println("e3:", iv)
 		}
-	}
-	return
-}
-
-func Quantise(m string) (b []byte, e error) {
-	b = append(b, m...)
-	if p := len(b) % aes.BlockSize; p != 0 {
-		p = aes.BlockSize - p
-		//  this is insecure and inflexible as we're padding with NUL!
-		b = append(b, make([]byte, p)...)
 	}
 	return
 }
@@ -88,28 +76,17 @@ func Quantise(m string) (b []byte, e error) {
 func IV() (b []byte, e error) {
 	b = make([]byte, aes.BlockSize)
 	_, e = rand.Read(b)
+	fmt.Println("IV() =", string(b))
 	return
 }
 
-func DecryptAES(m []byte, k string) (r string, e error) {
+func DecryptAES(r io.Reader, k string, f func(*cipher.StreamReader)) (e error) {
 	var b cipher.Block
 	if b, e = aes.NewCipher([]byte(k)); e == nil {
-		var iv []byte
-		iv, m = Unpack(m)
-		c := cipher.NewCBCDecrypter(b, iv)
-		c.CryptBlocks(m, m)
-		r = Dequantise(m)
+		iv := make([]byte, aes.BlockSize)
+		if _, e = r.Read(iv); e == nil {
+			f(&cipher.StreamReader{S: cipher.NewOFB(b, iv), R: r})
+		}
 	}
 	return
-}
-
-func Dequantise(m []byte) string {
-	var i int
-	for i = len(m) - 1; i > 0 && m[i] == 0; i-- {
-	}
-	return string(m[:i+1])
-}
-
-func Unpack(m []byte) (iv, r []byte) {
-	return m[:aes.BlockSize], m[aes.BlockSize:]
 }

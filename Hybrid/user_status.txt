@@ -1,0 +1,5 @@
+= = = = = = = = = = User Status = = = = = = = = = =
+ID  	{{.ID}}
+Key 	{{.PrintableKey}}
+Files	{{len .FileStore}}
+= = = = = = = = = = = = = = = = = = = = = = = = = =

@@ -2,9 +2,11 @@ package main
 
 import (
 	"bytes"
+	"crypto/cipher"
 	"crypto/rsa"
 	. "fmt"
 	"html"
+	"io"
 	"io/ioutil"
 	"net/http"
 )
@@ -19,46 +21,41 @@ const (
 var PublicKey *rsa.PublicKey
 
 func main() {
-	ServerStatus()
-	PublicKey = ServerKey()
-	users := []string{RegisterUser(), RegisterUser(), RegisterUser()}
-	keys := []string{}
-	ServerStatus()
-	for i, v := range users {
-		k := GenerateAESKey(256)
-		Println(len(k))
-		keys = append(keys, k)
-		StoreKey(v, keys[i])
-		UserStatus(v)
-		ForgetUser(v)
-		ServerStatus()
-		for _, v := range users {
-			UserStatus(v)
+	PublicKey = GetServerKey()
+	f := "this is a test file"
+	u := RegisterUser()
+	k := GenerateAESKey(256)
+	Println("k =", k)
+	StoreKey(u, k)
+	UserStatus(k, u)
+	StoreFile(k, u, "test", f)
+	if rf, e := RetrieveFile(k, u, "test"); e == nil {
+		switch b, e := ioutil.ReadAll(rf); {
+		case e != nil:
+			Println(e)
+		case string(b) != f:
+			Println("Test file corrupted:", string(b))
 		}
 	}
 
+	//	k2 := GenerateAESKey(256)
+	//	Println("k2 =", k2)
+	//	StoreKey(u, k2)
+	//	UserStatus(k, u)
+	//	UserStatus(k2, u)
 	/*
-		user := RegisterUser()
-		files := []string{"A", "BC", "DEF", "GHIJ"}
-
-		filename := func(i int) string {
-			return Sprint("file_", i)
+		f := "this is a test file"
+		StoreFile(k2, u, "test", f)
+		UserStatus(k2, u)
+		ListFiles(k2, u)
+		if rf, e := RetrieveFile(k2, u, "test"); e == nil {
+			switch b, e := ioutil.ReadAll(rf); {
+			case e != nil:
+				Println(e)
+			case string(b) != f:
+				Println("Test file corrupted:", string(b))
+			}
 		}
-		for i, v := range files {
-			StoreFile(user, filename(i), v)
-		}
-		ListFiles(user)
-		UserStatus(user)
-
-		for i, _ := range files {
-			f := filename(i)
-			RetrieveFile(user, f)
-			DeleteFile(user, f)
-			ListFiles(user)
-		}
-		UserStatus(user)
-		ForgetUser(user)
-		ServerStatus()
 	*/
 }
 
@@ -72,17 +69,30 @@ func printResponse(b []byte, e error) (v string) {
 	return
 }
 
+func printEncryptedResponse(key string, b []byte, e error) {
+	if e == nil {
+		e = DecryptAES(bytes.NewBuffer(b), key, func(s *cipher.StreamReader) {
+			b, e = ioutil.ReadAll(s)
+		})
+	}
+	printResponse(b, e)
+}
+
 func ServerStatus() {
 	printResponse(Do("GET", STATUS))
 }
 
-func ServerKey() (v *rsa.PublicKey) {
+func GetServerKey() (v *rsa.PublicKey) {
 	if k, e := LoadPublicKey(printResponse(Do("GET", KEY))); e == nil {
 		v = k.(*rsa.PublicKey)
 	} else {
 		panic(e)
 	}
 	return
+}
+
+func GetIV() (v string) {
+	return printResponse(Do("POST", USER))
 }
 
 func RegisterUser() string {
@@ -92,31 +102,31 @@ func RegisterUser() string {
 func StoreKey(id, key string) {
 	if k, e := EncryptRSA(PublicKey, []byte(key), []byte(id)); e == nil {
 		printResponse(Do("POST", KEY, id, string(k)))
+	} else {
+		Println("StoreKey: public key encryption failed")
 	}
 }
 
-func UserStatus(id string) {
-	printResponse(Do("GET", USER, id))
+func UserStatus(key, id string) {
+	r, e := Do("GET", USER, id)
+	printEncryptedResponse(key, r, e)
 }
 
-func ForgetUser(id string) {
-	printResponse(Do("DELETE", USER, id))
+func ListFiles(key, id string) {
+	r, e := Do("GET", FILE, id)
+	printEncryptedResponse(key, r, e)
 }
 
-func ListFiles(id string) {
-	printResponse(Do("GET", FILE, id))
-}
-
-func StoreFile(id, tag, content string) {
+func StoreFile(key, id, tag, content string) {
+	Println("StoreFile:", content)
 	printResponse(Do("POST", FILE, id, tag, content))
 }
 
-func RetrieveFile(id, tag string) {
-	printResponse(Do("GET", FILE, id, tag))
-}
-
-func DeleteFile(id, tag string) {
-	printResponse(Do("DELETE", FILE, id, tag))
+func RetrieveFile(key, id, tag string) (f io.Reader, e error) {
+	r, e := Do("GET", FILE, id, tag)
+	printEncryptedResponse(key, r, e)
+	f = bytes.NewBuffer(r)
+	return
 }
 
 func Do(m, r string, p ...string) (b []byte, e error) {

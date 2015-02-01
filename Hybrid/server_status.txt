@@ -1,0 +1,7 @@
+= = = = = = = = =  Server Status  = = = = = = = = =
+launched     {{.Started}}
+current time {{.Now}}
+users        {{.Users}}
+files        {{.Files}}
+requests     {{.Requests}}
+= = = = = = = = = = = = = = = = = = = = = = = = = =
