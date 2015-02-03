@@ -3,7 +3,6 @@ package main
 import (
 	"crypto/rand"
 	"encoding/base32"
-	"encoding/base64"
 	. "fmt"
 	. "time"
 )
@@ -11,14 +10,14 @@ import (
 type FileStore map[string]string
 
 type user struct {
-	Key        string
+	Key        []byte
 	ID         string
 	Registered Time
 	FileStore
 }
 
 func (u *user) PrintableKey() (r string) {
-	r = base64.StdEncoding.EncodeToString([]byte(u.Key))
+	r = base32.StdEncoding.EncodeToString([]byte(u.Key))
 	return
 }
 
@@ -36,11 +35,11 @@ func (u *UserDirectory) NewUserToken() string {
 	return base32.StdEncoding.EncodeToString(b)
 }
 
-func (u *UserDirectory) CreateUser() (t string) {
+func (u *UserDirectory) CreateUser(k []byte) (t string) {
 	t = u.NewUserToken()
 	for _, ok := server.UserDirectory[t]; ok; _, ok = server.UserDirectory[t] {
 		t = u.NewUserToken()
 	}
-	(*u)[t] = &user{ID: t, Registered: Now(), FileStore: make(FileStore)}
+	(*u)[t] = &user{Key: k, ID: t, Registered: Now(), FileStore: make(FileStore)}
 	return
 }

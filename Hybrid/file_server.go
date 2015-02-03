@@ -52,11 +52,13 @@ func (s *FileServer) SendEncrypted(w http.ResponseWriter, id string, f func(*cip
 	s.Requests++
 	if u, ok := s.UserDirectory[id]; ok {
 		if len(u.Key) > 0 {
-			EncryptAES(w, u.Key, func(s *cipher.StreamWriter) {
+			if e := EncryptAES(w, u.Key, func(s *cipher.StreamWriter) {
 				f(s, u)
-			})
+			}); e != nil {
+				http.Error(w, e.Error(), http.StatusNotAcceptable)
+			}
 		} else {
-			http.Error(w, "Encryption Key Missing", http.StatusNotAcceptable)
+			http.Error(w, "Encryption Key Missing", http.StatusInternalServerError)
 		}
 	} else {
 		http.Error(w, "Not Authorised", http.StatusUnauthorized)

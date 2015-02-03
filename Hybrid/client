@@ -1,1 +1,1 @@
-go run crypto.go client.go
+go run aes.go rsa.go client.go

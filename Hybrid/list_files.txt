@@ -1,5 +1,5 @@
 = = = = = = = = =  Stored  Files  = = = = = = = = =
 {{ range $name, $content := .FileStore }}
-{{$name}} {{ len $content }}
+{{$name}} {{ len $content }}  [{{$content}}]
 {{ end }}
 = = = = = = = = = = = = = = = = = = = = = = = = = =

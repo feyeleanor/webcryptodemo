@@ -7,11 +7,13 @@
 			<tr>
 				<th>file</th>
 				<th>size</th>
+				<th>content</th>
 			</tr>
 			{{ range $name, $content := .FileStore }}
 				<tr>
 					<td>{{$name}}</td>
 					<td>{{ len $content }}</td>
+					<td>{{$content}}</td>
 				</tr>
 			{{ end }}
 		</table>
