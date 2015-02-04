@@ -31,16 +31,15 @@ func main() {
 	RetrieveFile(k, u, "test")
 	k = GenerateAESKey(256)
 	StoreKey(u, k)
-	RetrieveFile(k, u, "test")
-	//	UserStatus(k, u)
-	//	StoreFile(k, u, "test", f)
-	//	if rf, e := RetrieveFile(k, u, "test"); e == nil {
-	//		if b, e := ioutil.ReadAll(rf); e == nil {
-	//			Println("Test file corrupted:", string(b))
-	//		} else {
-	//			Println(e)
-	//		}
-	//	}
+	if rf, e := RetrieveFile(k, u, "test"); e == nil {
+		if b, e := ioutil.ReadAll(rf); e == nil {
+			if string(b) == f {
+				Println("file returned correctly")
+			} else {
+				Println("Test file corrupted:", string(b))
+			}
+		}
+	}
 
 	//	k2 := GenerateAESKey(256)
 	//	Println("k2 =", k2)
@@ -132,8 +131,7 @@ func StoreFile(key []byte, id, tag, content string) {
 
 func RetrieveFile(key []byte, id, tag string) (f io.Reader, e error) {
 	r, e := Do("GET", FILE, id, tag)
-	printEncryptedResponse(key, r, e)
-	f = bytes.NewBuffer(r)
+	f = bytes.NewBufferString(printEncryptedResponse(key, r, e))
 	return
 }
 
