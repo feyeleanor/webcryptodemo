@@ -51,8 +51,9 @@ func (s *FileServer) Now() Time {
 func (s *FileServer) SendEncrypted(w http.ResponseWriter, id string, f func(*cipher.StreamWriter, *user)) {
 	s.Requests++
 	if u, ok := s.UserDirectory[id]; ok {
-		if len(u.Key) > 0 {
-			if e := EncryptAES(w, u.Key, func(s *cipher.StreamWriter) {
+		if u.Key != nil {
+			u.NewIV()
+			if e := u.EncryptCFB(w, func(s *cipher.StreamWriter) {
 				f(s, u)
 			}); e != nil {
 				http.Error(w, e.Error(), http.StatusNotAcceptable)
@@ -68,8 +69,8 @@ func (s *FileServer) SendEncrypted(w http.ResponseWriter, id string, f func(*cip
 func (s *FileServer) ReceiveEncrypted(w http.ResponseWriter, r *http.Request, id string, f func(*cipher.StreamReader, *user)) {
 	s.Requests++
 	if u, ok := s.UserDirectory[id]; ok {
-		if len(u.Key) > 0 {
-			if e := DecryptAES(r.Body, u.Key, func(s *cipher.StreamReader) {
+		if u.Key != nil {
+			if e := u.DecryptCFB(r.Body, func(s *cipher.StreamReader) {
 				f(s, u)
 			}); e != nil {
 				http.Error(w, e.Error(), http.StatusNotAcceptable)
@@ -80,19 +81,6 @@ func (s *FileServer) ReceiveEncrypted(w http.ResponseWriter, r *http.Request, id
 	} else {
 		http.Error(w, "Not Authorised", http.StatusUnauthorized)
 	}
-
-	/*	s.RequiresAuthorisation(w, id, func(u *user) {
-			if len(u.Key) > 0 {
-				if e := DecryptAES(r.Body, u.Key, func(s *cipher.StreamReader) {
-					f(s, u)
-				}); e != nil {
-					http.Error(w, e.Error(), http.StatusNotAcceptable)
-				}
-			} else {
-				http.Error(w, "Encryption Key Missing", http.StatusNotAcceptable)
-			}
-		})
-	*/
 }
 
 func (s *FileServer) RequiresAuthorisation(w http.ResponseWriter, id string, f func(*user)) {

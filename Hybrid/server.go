@@ -27,7 +27,7 @@ func main() {
 	server.GET("/key", PublicKey)
 	server.POST("/key/:id", StoreKey)
 
-	server.POST("/user", RegisterUser)
+	server.POST("/user", CreateUser)
 	server.GET("/user/:id", UserStatus)
 
 	server.GET("/file/:id", ListFiles)
@@ -59,7 +59,7 @@ func ReadRSA(r io.Reader, l []byte) (b []byte, e error) {
 	return
 }
 
-func RegisterUser(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+func CreateUser(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 	server.Requests++
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	if b, e := ReadRSA(r.Body, []byte("REGISTER")); e == nil {
@@ -73,8 +73,10 @@ func RegisterUser(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 
 func StoreKey(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 	server.RequiresAuthorisation(w, p.ByName("id"), func(u *user) {
+		Println("id =", u.ID)
 		if b, e := ReadRSA(r.Body, []byte(u.ID)); e == nil {
 			u.Key = b
+			http.Error(w, "key updated", http.StatusAccepted)
 			server.SendEncrypted(w, u.ID, func(s *cipher.StreamWriter, u *user) {
 				renderTemplate(s, "user_status", u)
 			})

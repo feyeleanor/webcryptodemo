@@ -4,73 +4,116 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
-	"fmt"
 	"io"
 )
 
-func GenerateAESKey(n int) (b []byte) {
-	switch n {
-	case 128:
-		b = make([]byte, 16)
-	case 192:
-		b = make([]byte, 24)
-	case 256:
-		b = make([]byte, 32)
-	}
-	rand.Read(b)
-	return
+type AESKey struct {
+	Key []byte
+	IV  []byte
+	b   cipher.Block
 }
 
-func GenerateIV() (b []byte, e error) {
-	b = make([]byte, aes.BlockSize)
-	if _, e = rand.Read(b); e != nil {
-		panic(e)
-	}
-	return
-}
-
-func SendIV(w io.Writer, k []byte, f func([]byte)) {
-	if iv, e := GenerateIV(); e == nil {
-		if _, e = w.Write(iv); e == nil {
-			f(iv)
-		} else {
-			fmt.Println(e)
+//	A new AESKey is always created with a random IV
+func NewAESKey(v interface{}) (r *AESKey) {
+	r = &AESKey{IV: make([]byte, aes.BlockSize)}
+	switch v := v.(type) {
+	case int:
+		switch v {
+		case 128:
+			r.Key = make([]byte, 16)
+		case 192:
+			r.Key = make([]byte, 24)
+		case 256:
+			r.Key = make([]byte, 32)
 		}
+		rand.Read(r.Key)
+	case []byte:
+		r.Key = v
+	case string:
+		r.Key = []byte(v)
+	case AESKey:
+		r.Key = v.Key
 	}
+	r.NewIV()
+	r.b, _ = aes.NewCipher(r.Key)
+	return
 }
 
-func ReadIV(r io.Reader, f func([]byte)) {
-	iv := make([]byte, aes.BlockSize)
-	if _, e := r.Read(iv); e == nil {
-		f(iv)
-	} else {
-		fmt.Println(e)
-	}
-
+func (k *AESKey) NewIV() {
+	rand.Read(k.IV)
 }
 
-func EncryptAES(w io.Writer, k []byte, f func(*cipher.StreamWriter)) (e error) {
-	//	fmt.Println("EncryptAES: k =", []byte(k))
-	var b cipher.Block
-	if b, e = aes.NewCipher(k); e == nil {
-		SendIV(w, k, func(iv []byte) {
-			//			fmt.Println("EncryptAES: iv =", iv)
-			f(&cipher.StreamWriter{S: cipher.NewCFBEncrypter(b, iv), W: w})
-		})
+func (k *AESKey) writeIV(w io.Writer, f func()) (e error) {
+	if _, e = w.Write(k.IV); e == nil {
+		f()
 	}
 	return
 }
 
-func DecryptAES(r io.Reader, k []byte, f func(*cipher.StreamReader)) (e error) {
-	//	fmt.Println("DecryptAES: k =", []byte(k))
-	ReadIV(r, func(iv []byte) {
-		//		fmt.Println("DecryptAES: iv =", iv)
-		var b cipher.Block
-		if b, e = aes.NewCipher([]byte(k)); e == nil {
-			f(&cipher.StreamReader{S: cipher.NewCFBDecrypter(b, iv), R: r})
-		} else {
-			fmt.Println(e)
+func (k *AESKey) readIV(r io.Reader, f func()) (e error) {
+	if _, e = r.Read(k.IV); e == nil {
+		f()
+	}
+	return
+}
+
+func (k *AESKey) EncryptCFB(w io.Writer, v interface{}) (e error) {
+	return k.writeIV(w, func() {
+		s := &cipher.StreamWriter{S: cipher.NewCFBEncrypter(k.b, k.IV), W: w}
+		switch v := v.(type) {
+		case string:
+			_, e = s.Write([]byte(v))
+		case []byte:
+			_, e = s.Write(v)
+		case func(*cipher.StreamWriter):
+			v(s)
 		}
 	})
-	return
+}
+
+func (k *AESKey) DecryptCFB(r io.Reader, v interface{}) (e error) {
+	return k.readIV(r, func() {
+		s := &cipher.StreamReader{S: cipher.NewCFBDecrypter(k.b, k.IV), R: r}
+		switch v := v.(type) {
+		case []byte:
+			_, e = s.Read(v)
+		case func(*cipher.StreamReader):
+			v(s)
+		}
+	})
+}
+
+type CFBStream struct {
+	*AESKey
+}
+
+func NewCFBStream(v interface{}) *CFBStream {
+	return &CFBStream{AESKey: NewAESKey(v)}
+}
+
+func (s *CFBStream) Write(w io.Writer, v interface{}) (e error) {
+	s.NewIV()
+	return s.writeIV(w, func() {
+		sw := &cipher.StreamWriter{S: cipher.NewCFBEncrypter(s.b, s.IV), W: w}
+		switch v := v.(type) {
+		case string:
+			_, e = sw.Write([]byte(v))
+		case []byte:
+			_, e = sw.Write(v)
+		case func(*cipher.StreamWriter):
+			v(sw)
+		}
+	})
+}
+
+func (s *CFBStream) Read(r io.Reader, v interface{}) (e error) {
+	return s.readIV(r, func() {
+		sr := &cipher.StreamReader{S: cipher.NewCFBDecrypter(s.b, s.IV), R: r}
+		switch v := v.(type) {
+		case []byte:
+			_, e = sr.Read(v)
+		case func(*cipher.StreamReader):
+			v(sr)
+		}
+	})
 }

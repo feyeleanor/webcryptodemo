@@ -10,7 +10,7 @@ import (
 type FileStore map[string]string
 
 type user struct {
-	Key        []byte
+	*AESKey
 	ID         string
 	Registered Time
 	FileStore
@@ -40,6 +40,6 @@ func (u *UserDirectory) CreateUser(k []byte) (t string) {
 	for _, ok := server.UserDirectory[t]; ok; _, ok = server.UserDirectory[t] {
 		t = u.NewUserToken()
 	}
-	(*u)[t] = &user{Key: k, ID: t, Registered: Now(), FileStore: make(FileStore)}
+	(*u)[t] = &user{AESKey: NewAESKey(k), ID: t, Registered: Now(), FileStore: make(FileStore)}
 	return
 }
